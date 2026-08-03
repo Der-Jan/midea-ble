@@ -18,6 +18,7 @@
 
 - **协议**：描述美的/华凌空调 BLE 通信的完整链路——从蓝牙广播解析、HKDF 密钥派生、P-256 ECDH 密钥协商、AES-128-CCM 加解密，到三层帧编解码与业务命令编码。
 - **库**：协议参考实现（`internal/ac`、`internal/proto`、`internal/ble`），按四层架构组织，提供 `IDevice` 门面可直接嵌入你自己的 Go 项目做二次开发。
+- **Android 适配**：`mobile` 是面向 gomobile 的薄适配层，将 `internal/ac` 导出为 AAR；Android BluetoothGatt 和 Compose demo 位于独立项目，不混入本仓库的平台目录。
 - **CLI**：配套的命令行工具 `midea-ble-go`，支持单次命令执行和 REPL 交互两种模式，用于快速验证协议或日常控制空调。
 
 ## 特性
@@ -88,6 +89,20 @@ for state := range ch {
     fmt.Printf("电源=%v 模式=%s 温度=%.1f℃\n", state.Run, state.Mode, state.Temp)
 }
 ```
+
+### Android AAR
+
+在本仓库生成协议 AAR：
+
+```bash
+gomobile bind -target android -androidapi 23 \\
+  -javapkg com.sorinyang.mideable \\
+  -o build/midea-mobile.aar ./mobile
+```
+
+将生成的文件复制到独立 Android demo 的 `app/libs/midea-mobile.aar`，再由
+demo 提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compose
+界面、扫描和连接代码不属于本仓库，便于 Android 应用独立演进。
 
 ## 文档
 
