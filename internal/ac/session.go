@@ -37,11 +37,12 @@ func DefaultOptions() Options {
 	return Options{
 		C1Interval:   1500 * time.Millisecond,
 		StepInterval: 1200 * time.Millisecond,
-		// 设备恒丢业务第一帧、且对收到的最后一帧去抖(~550ms 后才回复)：
-		// 先 250ms 快速补发第二帧，之后耐心等回复(900ms)再补，避免快速重发不断重置去抖。
-		BizInterval:  150 * time.Millisecond,
-		BizReplyWait: 900 * time.Millisecond,
-		Keepalive:    8 * time.Second,
+		// 设备可能丢弃业务首帧，并且 Android BLE 指示通知会排队，
+		// 因此首帧快速补发，后续等待足够长的去抖和传输时间。
+		BizInterval:  100 * time.Millisecond,
+		BizReplyWait: 5 * time.Second,
+		// 设备会主动推送状态，不需要额外的查询保活。
+		Keepalive:    0,
 		OpTimeout:    30 * time.Second,
 		MaxReconnect: 3,
 	}
@@ -88,8 +89,12 @@ func NewSession(dial Dialer, advertisData, openID6 []byte, opt Options) (*Sessio
 	if len(openID6) != 6 {
 		return nil, errors.New("openID6 必须 6 字节")
 	}
+	// 会话需要长期持有这两段数据。特别是 gomobile 调用中，传入的
+	// Java byte[] 可能在桥接函数返回后解除固定，不能直接保存底层切片。
+	adCopy := append([]byte(nil), advertisData...)
+	idCopy := append([]byte(nil), openID6...)
 	return &Session{
-		dial: dial, advertisData: advertisData, openID6: openID6,
+		dial: dial, advertisData: adCopy, openID6: idCopy,
 		opt: opt, beep: true, subs: map[int]chan *Status{},
 	}, nil
 }
@@ -128,7 +133,9 @@ func (s *Session) onRaw(b []byte) {
 		if len(s.recvBuf) < 3 {
 			break
 		}
-		total := 2 + 1 + int(s.recvBuf[2]) + 1
+		// LEN 表示从 LEN 字段开始到校验和的总长度，因此完整帧为
+		// 2 字节帧头加 LEN 字节。多加一个长度字节会截断所有回包。
+		total := 2 + int(s.recvBuf[2])
 		if len(s.recvBuf) < total {
 			break
 		}
@@ -424,8 +431,31 @@ func (s *Session) doBiz(ctx context.Context, applianceBiz []byte) (*Status, erro
 
 	start := time.Now()
 	deadline := time.After(s.opt.OpTimeout)
-	for i := 0; i < 6; i++ {
-		frame, err := hs.BuildBiz(BizTypeAC, applianceBiz)
+	frame, err := hs.BuildBiz(BizTypeAC, applianceBiz)
+	if err != nil {
+		return nil, err
+	}
+	debugf("→ 发送#1 @%s", time.Now().Format("05.000"))
+	if err := t.Write(frame); err != nil {
+		s.setPhase("closed")
+		return nil, fmt.Errorf("写失败（链路断）: %w", err)
+	}
+
+	// 设备通常丢弃首帧，并对最后一帧做约 550ms 去抖；Android BLE
+	// 的 indication 还可能在链路上排队，所以每次重试给出充足等待时间。
+	const retryWait = 3 * time.Second
+	for i := 1; i <= 3; i++ {
+		select {
+		case st := <-pend:
+			debugf("doBiz: %d 帧, 耗时 %v", i, time.Since(start))
+			return st, nil
+		case <-time.After(retryWait):
+		case <-deadline:
+			return nil, errors.New("业务超时（无回包）")
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		frame, err = hs.BuildBiz(BizTypeAC, applianceBiz)
 		if err != nil {
 			return nil, err
 		}
@@ -434,22 +464,25 @@ func (s *Session) doBiz(ctx context.Context, applianceBiz []byte) (*Status, erro
 			s.setPhase("closed")
 			return nil, fmt.Errorf("写失败（链路断）: %w", err)
 		}
-		wait := s.opt.BizReplyWait // 第二帧起：耐心等去抖回复
-		if i == 0 {
-			wait = s.opt.BizInterval // 第一帧恒被丢：快速补发
-		}
-		select {
-		case st := <-pend:
-			debugf("doBiz: %d 次发送, 耗时 %v", i+1, time.Since(start))
-			return st, nil
-		case <-time.After(wait):
-		case <-deadline:
-			return nil, errors.New("业务超时（无回包）")
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
 	}
 	return nil, errors.New("业务无回包")
+}
+
+// fireBiz 发送单帧业务命令，不等待回复。用于不应阻塞用户操作的保活。
+func (s *Session) fireBiz(applianceBiz []byte) error {
+	s.mu.Lock()
+	if s.phase != "biz" || s.hs == nil {
+		s.mu.Unlock()
+		return errDisconnected
+	}
+	hs := s.hs
+	t := s.t
+	s.mu.Unlock()
+	frame, err := hs.BuildBiz(BizTypeAC, applianceBiz)
+	if err != nil {
+		return err
+	}
+	return t.Write(frame)
 }
 
 // Query 主动查询并刷新缓存。
@@ -564,9 +597,15 @@ func (s *Session) startKeepalive() {
 			case <-stop:
 				return
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), s.opt.OpTimeout)
-				_, _ = s.Query(ctx)
-				cancel()
+				// 保活只需发出查询，不等待设备回包；否则会与用户操作
+				// 争用 opMu，并把设备主动推送的状态误当作查询响应。
+				if !s.opMu.TryLock() {
+					continue
+				}
+				if s.Connected() {
+					_ = s.fireBiz(BuildQueryFrame(s.nextOrder(), 0))
+				}
+				s.opMu.Unlock()
 			}
 		}
 	}()
