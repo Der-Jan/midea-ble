@@ -34,6 +34,9 @@ midea-ble-go/
 │   └── ble/                   # BLE 层·平台传输（唯一引入 tinygo 的包）
 │       ├── scanner.go         #   扫描美的 0x06A8 广播 + advertisData 重建
 │       └── ble.go             #   连接 + GATT 发现(FFA1/FFA2) + 字节收发
+├── mobile/                    # gomobile 适配层：将 internal/ac 导出为 AAR
+│   ├── device.go              #   Java-friendly Device 门面
+│   └── interfaces.go          #   Transport / Dialer / StateListener 接口
 ├── docs/
 │   ├── architecture.md        # 本文件：架构设计
 │   ├── cli.md                 # CLI 用法说明
@@ -46,9 +49,14 @@ midea-ble-go/
 └── README.md
 ```
 
+Android Compose demo 是独立仓库 `midea-ble-android-demo`。它将生成的
+`mobile` AAR 作为依赖，并在 Android 工程内部实现 BluetoothGatt 扫描、连接和
+`Transport`；主仓库不再包含 `platform/android` 或 Android app 目录。
+
 ## 分层架构
 
-项目采用严格的**四层单向依赖**架构，每层只依赖下一层，各层职责单一：
+Go 协议主链路采用严格的**四层单向依赖**架构，每层只依赖下一层；`mobile`
+位于主链路之外，仅负责把业务门面包装为 Java 可调用的 AAR：
 
 ```mermaid
 graph TB
@@ -128,6 +136,7 @@ graph TB
 | **业务层** | `internal/ac/` | 按功能模块暴露 Get/Set/Watch 能力；装配 BLE 扫描/连接 + Session 为 IDevice 门面 | `IDevice`, `IPower`, `IMode`, `Session`, `Transport` |
 | **协议层** | `internal/proto/` | 纯算法：三层帧编解码、HKDF/ECDH/AES-CCM 密码学、握手状态机。**零平台依赖，离线可测** | `HandshakeState`, `EncodeConn`, `CipherMsg` |
 | **BLE 层** | `internal/ble/` | 调用本机蓝牙执行扫描、连接、收发字节。**唯一引入 tinygo 的包，换平台只改此处** | `Conn`, `Device`, `Scan()` |
+| **移动适配层** | `mobile/` | 以 gomobile 兼容的 Java API 包装 `internal/ac`，接收宿主提供的 Transport | `Device`, `Transport`, `Dialer` |
 
 ### 关键设计决策
 
@@ -146,6 +155,9 @@ type Transport interface {
 - **生产实现**：`ble.Conn`（经 tinygo → CoreBluetooth / BlueZ）
 - **测试实现**：`sessiontest` 包的内存模拟器
 
+Android 不直接依赖 `internal/ac` 的 Go 包路径，而是使用 `mobile` 生成的 AAR；
+BluetoothGatt 实现通过 `mobile.Transport` 注入，因而与协议层保持同一条依赖边界。
+
 协议层（`proto` / `Session`）通过此接口与 BLE 层解耦，**不引入 tinygo**，离线即可跑完整的一致性向量测试。
 
 #### 2. Session 引擎 — 协议驱动的核心
@@ -155,7 +167,7 @@ type Transport interface {
 - **握手相位机**：C1（预热泵）→ C2（密钥交换）→ C3（会话密钥验证），每阶段独立重发泵
 - **业务收发**：设备恒丢第一帧，采用"快速补发 + 耐心等待去抖回复"策略
 - **读-改-写控制**：先 Pull 设备状态 → 修改 ACState 缓存 → 下发整帧（避免部分覆盖）
-- **保活**：定时 Query 维持连接
+- **保活**：设备主动推送状态，默认不额外查询；显式启用时只发送不等待回复的查询
 - **pub-sub**：状态帧到达时广播给所有订阅者（模块的 Watch 通道）
 
 #### 3. 功能模块 — Get / Set / Watch 三向能力
