@@ -49,7 +49,7 @@ midea-ble-go/
 └── README.md
 ```
 
-Android Compose demo 是独立仓库 `midea-ble-android-demo`。它将生成的
+Android Compose demo 是独立仓库 `midea-ble-android`。它将生成的
 `mobile` AAR 作为依赖，并在 Android 工程内部实现 BluetoothGatt 扫描、连接和
 `Transport`；主仓库不再包含 `platform/android` 或 Android app 目录。
 
