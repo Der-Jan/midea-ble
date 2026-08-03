@@ -104,6 +104,10 @@ gomobile bind -target android -androidapi 23 \\
 demo 提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compose
 界面、扫描和连接代码不属于本仓库，便于 Android 应用独立演进。
 
+## 基于本协议库的应用
+
+- [Midea-BLE / 美的 BLE（Android）](https://github.com/midea-ble/midea-ble-android#readme)：基于本协议库的独立 Android 应用。
+
 ## 文档
 
 - 协议规范（BLE 特征、帧结构、密钥派生、握手时序、业务命令）→ [docs/protocol.md](docs/protocol.md)
