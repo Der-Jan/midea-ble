@@ -1,4 +1,4 @@
-.PHONY: help build build-linux run install uninstall where fmt vet test tidy clean
+.PHONY: help build build-linux aar run install uninstall where fmt vet test tidy clean
 
 GO    ?= go
 APP   := midea-ble-go
@@ -17,6 +17,18 @@ LDFLAGS    := -X 'main.Version=$(VERSION)' \
               -X 'main.Commit=$(COMMIT_ID)' \
               -X 'main.BuildTime=$(BUILD_TIME)'
 
+# ---- Android AAR（gomobile bind）----
+# 环境变量未设置时自动探测本机默认位置；可用 `make aar ANDROID_HOME=/xxx` 覆盖。
+# 注意：这些变量行不能写行尾注释——make 会把 # 前的空格也吞进值里。
+ANDROID_HOME     ?= $(HOME)/Library/Android/sdk
+ANDROID_NDK_HOME ?= $(shell ls -d $(ANDROID_HOME)/ndk/* 2>/dev/null | tail -1)
+# gomobile bind 用 javac -source/-target 1.8，JDK≥22 已移除，必须用 ≤21 的 JDK。
+JAVA_HOME        ?= $(shell /usr/libexec/java_home -v '17' 2>/dev/null || /usr/libexec/java_home -v '21' 2>/dev/null || /usr/libexec/java_home 2>/dev/null)
+# NDK 27 最低支持 21（gomobile 默认 androidapi=16 会报不匹配）。
+ANDROID_API      ?= 21
+# 有 tag 用 tag，无 tag 用提交号，dirty 时附加 -dirty。
+AAR_VERSION      ?= $(VERSION)
+
 .DEFAULT_GOAL := help
 
 help: ## 显示此帮助
@@ -33,6 +45,21 @@ build-linux: ## 交叉编译 Linux amd64
 	@mkdir -p build
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "-s -w $(LDFLAGS)" \
 		-o $(BIN)-linux-amd64 $(PKG)
+
+aar: ## 用 gomobile 生成 Android AAR 到 build/（自动建目录，文件名含 git 版本）
+	@mkdir -p build
+	@test -n "$(ANDROID_NDK_HOME)" || { echo "✗ 未找到 NDK，请设置 ANDROID_NDK_HOME"; exit 1; }
+	@test -n "$(JAVA_HOME)" || { echo "✗ 未找到 JDK，请设置 JAVA_HOME"; exit 1; }
+	@echo "→ ANDROID_HOME=$(ANDROID_HOME)"
+	@echo "→ ANDROID_NDK_HOME=$(ANDROID_NDK_HOME)"
+	@echo "→ JAVA_HOME=$(JAVA_HOME)"
+	ANDROID_HOME="$(ANDROID_HOME)" \
+	ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
+	JAVA_HOME="$(JAVA_HOME)" \
+	$(GO) tool gomobile bind -androidapi=$(ANDROID_API) -target=android \
+		-javapkg com.sorinyang.mideable \
+		-o build/midea-ble-$(AAR_VERSION).aar ./mobile
+	@echo "✓ 生成 AAR: build/midea-ble-$(AAR_VERSION).aar"
 
 run: build ## 编译并运行（无参进入 REPL；ARGS= 传子命令，如 make run ARGS="scan")
 	./$(BIN) $(ARGS)
