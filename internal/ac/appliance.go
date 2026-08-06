@@ -21,23 +21,49 @@ const (
 	ModeSmartDry = 6
 )
 
-// 风速
+// 风速（美的/华凌 BLE 协议风速枚举：40低 60中 80高 100强劲 102自动）
 const (
-	WindLow   = 1
-	WindMid   = 2
-	WindHigh  = 3
-	WindFull  = 4
-	WindMute  = 5
-	WindAuto  = 6
-	WindFixed = 7
+	WindLow  = 40
+	WindMid  = 60
+	WindHigh = 80
+	WindFull = 100
+	WindAuto = 102
 )
 
-var ModeNames = map[int]string{1: "auto", 2: "cool", 3: "dry", 4: "heat", 5: "fan", 6: "smart_dry"}
-var WindNames = map[int]string{1: "low", 2: "mid", 3: "high", 4: "full", 5: "mute", 6: "auto", 7: "fixed"}
-var ModeByName = map[string]int{"auto": 1, "cool": 2, "dry": 3, "heat": 4, "fan": 5, "smart_dry": 6}
-var WindByName = map[string]int{"low": 1, "mid": 2, "high": 3, "full": 4, "mute": 5, "auto": 6, "fixed": 7}
+// ModeNames 模式/风速名称映射：正向「码→名」用于解析回包，反向「名→码」用于下发。
+// 键值直接引用上方常量，避免与常量定义割裂。
+var ModeNames = map[int]string{
+	ModeAuto:     "auto",
+	ModeCool:     "cool",
+	ModeDry:      "dry",
+	ModeHeat:     "heat",
+	ModeFan:      "fan",
+	ModeSmartDry: "smart_dry",
+}
+var WindNames = map[int]string{
+	WindLow:  "low",
+	WindMid:  "mid",
+	WindHigh: "high",
+	WindFull: "full",
+	WindAuto: "auto",
+}
+var ModeByName = map[string]int{
+	"auto":      ModeAuto,
+	"cool":      ModeCool,
+	"dry":       ModeDry,
+	"heat":      ModeHeat,
+	"fan":       ModeFan,
+	"smart_dry": ModeSmartDry,
+}
+var WindByName = map[string]int{
+	"low":  WindLow,
+	"mid":  WindMid,
+	"high": WindHigh,
+	"full": WindFull,
+	"auto": WindAuto,
+}
 
-// crc8_854 查表（从 sub_out/modules/AC 抽出）。
+// crc8_854 查表（AC 控制帧校验）。
 var crc8854Table = [256]byte{
 	0, 94, 188, 226, 97, 63, 221, 131, 194, 156, 126, 32, 163, 253, 31, 65,
 	157, 195, 33, 127, 252, 162, 64, 30, 95, 1, 227, 189, 62, 96, 130, 220,

@@ -88,7 +88,7 @@ func runSet(ctx context.Context, args []string) error {
 	adv := fs.String("adv", "", "手动 advertisData(hex)")
 	mode := fs.String("mode", "", "模式 auto/cool/dry/heat/fan/smart_dry")
 	temp := fs.Float64("temp", -1, "设定温度")
-	fan := fs.String("fan", "", "风速 low/mid/high/full/mute/auto/fixed")
+	fan := fs.String("fan", "", "风速 low/mid/high/full/auto")
 	swingUD := fs.Bool("swing-ud", false, "上下扫风")
 	swingLR := fs.Bool("swing-lr", false, "左右扫风")
 	eco := fs.Bool("eco", false, "ECO")

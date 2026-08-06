@@ -218,7 +218,7 @@ const connectedHelp = `命令（已连接）：
   on | off            开 / 关机
   temp <16-30>        设定温度（支持 .5）
   mode <auto|cool|dry|heat|fan|smart_dry>
-  fan  <low|mid|high|full|mute|auto|fixed>
+  fan  <low|mid|high|full|auto>
   swing ud|lr|both|off   扫风
   eco on|off          ECO 节能
   strong on|off       强劲
@@ -263,7 +263,7 @@ func (s *replSession) execConnected(ctx context.Context, cmd string, args []stri
 		report(s.dev.Mode().Set(ctx, args[0]))
 	case "fan":
 		if len(args) != 1 {
-			fmt.Println("用法: fan <low|mid|high|full|mute|auto|fixed>")
+			fmt.Println("用法: fan <low|mid|high|full|auto>")
 			return
 		}
 		report(s.dev.Fan().Set(ctx, args[0]))
@@ -325,7 +325,7 @@ func (s *replSession) execConnected(ctx context.Context, cmd string, args []stri
 // ---- completer ----
 
 var modeValues = []string{"auto", "cool", "dry", "heat", "fan", "smart_dry"}
-var fanValues = []string{"low", "mid", "high", "full", "mute", "auto", "fixed"}
+var fanValues = []string{"low", "mid", "high", "full", "auto"}
 
 func toSuggests(vals []string) []prompt.Suggest {
 	out := make([]prompt.Suggest, len(vals))
@@ -351,7 +351,7 @@ var connectedSuggests = []prompt.Suggest{
 	{Text: "off", Description: "关机"},
 	{Text: "temp", Description: "设定温度 16-30（支持 .5）"},
 	{Text: "mode", Description: "模式 auto/cool/dry/heat/fan/smart_dry"},
-	{Text: "fan", Description: "风速 low/mid/high/full/mute/auto/fixed"},
+	{Text: "fan", Description: "风速 low/mid/high/full/auto"},
 	{Text: "swing", Description: "扫风 ud|lr|both|off"},
 	{Text: "eco", Description: "ECO 节能 on|off"},
 	{Text: "strong", Description: "强劲 on|off"},

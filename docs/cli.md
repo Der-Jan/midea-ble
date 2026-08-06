@@ -74,7 +74,7 @@ midea-ble-go
 midea-ble-go set <dev> [--adv HEX]
     [--mode auto|cool|dry|heat|fan|smart_dry]
     [--temp 16-30]
-    [--fan low|mid|high|full|mute|auto|fixed]
+    [--fan low|mid|high|full|auto]
     [--swing-ud]
     [--swing-lr]
     [--eco]
@@ -87,7 +87,7 @@ midea-ble-go set <dev> [--adv HEX]
 | `--adv` | hex string | 手动指定 advertisData（hex 编码），一般无需手动提供 |
 | `--mode` | string | 运行模式：`auto`（自动）/ `cool`（制冷）/ `dry`（除湿）/ `heat`（制热）/ `fan`（送风）/ `smart_dry`（智能除湿） |
 | `--temp` | float | 设定温度，范围 16~30℃，支持 0.5℃ 步进（如 `25.5`） |
-| `--fan` | string | 风速：`low`（低）/ `mid`（中）/ `high`（高）/ `full`（强劲）/ `mute`（静音）/ `auto`（自动）/ `fixed`（固定） |
+| `--fan` | string | 风速：`low`（低）/ `mid`（中）/ `high`（高）/ `full`（强劲）/ `auto`（自动） |
 | `--swing-ud` | bool | 开启上下扫风 |
 | `--swing-lr` | bool | 开启左右扫风 |
 | `--eco` | bool | 开启 ECO 节能模式 |
@@ -102,8 +102,8 @@ midea-ble-go set <dev> [--adv HEX]
 # 制冷 26℃，自动风速
 midea-ble-go set 12345678AC0001 --mode cool --temp 26 --fan auto
 
-# 制热 24℃，静音风速 + 上下扫风
-midea-ble-go set 12345678AC0001 --mode heat --temp 24 --fan mute --swing-ud
+# 制热 24℃，高风速 + 上下扫风
+midea-ble-go set 12345678AC0001 --mode heat --temp 24 --fan high --swing-ud
 
 # 仅调温度（保持当前模式和风速）
 midea-ble-go set 12345678AC0001 --temp 22
@@ -225,7 +225,7 @@ midea-ble-go> connect 0
   on | off            开 / 关机
   temp <16-30>        设定温度（支持 .5）
   mode <auto|cool|dry|heat|fan|smart_dry>
-  fan  <low|mid|high|full|mute|auto|fixed>
+  fan  <low|mid|high|full|auto>
   swing ud|lr|both|off   扫风
   eco on|off          ECO 节能
   strong on|off       强劲
@@ -244,8 +244,8 @@ midea-ble-go> connect 0
 12345678AC0001> temp 24
 ✓ 24
 
-12345678AC0001> fan mute
-✓ mute
+12345678AC0001> fan auto
+✓ auto
 
 12345678AC0001> swing ud
 ✓ 上下:true 左右:false

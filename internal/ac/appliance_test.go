@@ -32,7 +32,7 @@ func TestControlFrame26CoolOn(t *testing.T) {
 		t.Fatal(err)
 	}
 	hexEq(t, "control26", f,
-		"aa24ac0000000000020240434a067f7fff300000009999999999000a0e8000000000019006")
+		"aa24ac0000000000020240434a667f7fff300000009999999999000a0e8000000000017db9")
 }
 
 func TestControlHalfDegree(t *testing.T) {

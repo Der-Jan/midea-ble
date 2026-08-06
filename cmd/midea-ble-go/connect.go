@@ -54,9 +54,10 @@ func printStatus(st *ac.Status, err error) {
 		pw, st.ModeName, st.TempSet, windDisplay(st), st.TempIn, st.TempOut, st.EcoFunc, st.Strong, st.FaultFlag)
 }
 
-// windDisplay 在标准 1~7 风速时显示名称，否则显示设备上报的原始档位码（如强劲/空闲下的 100/102）。
+// windDisplay 在标准风速枚举时显示名称，否则显示设备上报的原始档位码。
 func windDisplay(st *ac.Status) string {
-	if st.WindSpeed >= 1 && st.WindSpeed <= 7 {
+	switch st.WindSpeed {
+	case ac.WindLow, ac.WindMid, ac.WindHigh, ac.WindFull, ac.WindAuto:
 		return st.WindName
 	}
 	return fmt.Sprintf("档%d(设备自动)", st.WindSpeed)

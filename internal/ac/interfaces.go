@@ -41,7 +41,7 @@ type ITemperature interface {
 	Watch() <-chan float64
 }
 
-// IFan 风速（low/mid/high/full/mute/auto/fixed）。
+// IFan 风速（low/mid/high/full/auto）。
 type IFan interface {
 	Get(ctx context.Context) (string, error)
 	Set(ctx context.Context, fan string) (string, error)

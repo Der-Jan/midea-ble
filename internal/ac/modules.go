@@ -156,7 +156,7 @@ func (m *fanModule) Get(ctx context.Context) (string, error) {
 func (m *fanModule) Set(ctx context.Context, fan string) (string, error) {
 	code, ok := WindByName[fan]
 	if !ok {
-		return "", fmt.Errorf("未知风速: %s（可选 low/mid/high/full/mute/auto/fixed）", fan)
+		return "", fmt.Errorf("未知风速: %s（可选 low/mid/high/full/auto）", fan)
 	}
 	st, err := m.s.Control(ctx, func(a *ACState) { a.WindSpeed = code })
 	if err != nil {
