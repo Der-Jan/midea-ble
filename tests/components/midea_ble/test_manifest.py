@@ -31,3 +31,10 @@ def test_hacs_layout_contains_exactly_one_integration() -> None:
     assert hacs["name"] == "Midea BLE"
     assert hacs["homeassistant"] == "2026.8.0"
     assert [path.name for path in integrations] == ["midea_ble"]
+
+
+def test_local_brand_icon_is_square_256px_png() -> None:
+    icon = (ROOT / "custom_components/midea_ble/brand/icon.png").read_bytes()
+    assert icon[:8] == b"\x89PNG\r\n\x1a\n"
+    assert int.from_bytes(icon[16:20], "big") == 256
+    assert int.from_bytes(icon[20:24], "big") == 256

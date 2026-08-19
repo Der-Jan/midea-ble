@@ -1,125 +1,115 @@
-# Midea BLE for Home Assistant (experimental)
+# Midea BLE for Home Assistant
 
-This repository is being developed into a HACS-compatible Home Assistant custom
-integration for direct, local control of compatible Midea/Hualing BLE air
-conditioners. It includes Bluetooth discovery/config flow, native Python
-cryptography and framing, C1/C2/C3 authentication, one-shot connection/session
-handling, and a functional climate entity for power, mode, temperature, fan,
-and swing control. See
-[`docs/protocol-port-plan.md`](docs/protocol-port-plan.md).
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Compatibility is limited to devices speaking the protocol implemented by this
-repository. It does not imply support for every Midea product.
+An experimental HACS-compatible Home Assistant custom integration for direct,
+local control of compatible Midea and Hualing Bluetooth air conditioners. It
+does not require the Midea app or a cloud connection.
 
-## Development HACS installation
+The integration provides Bluetooth discovery, native Python authentication and
+protocol handling, and a climate entity for power, operating mode, target
+temperature, fan speed, and swing control.
 
-After these changes are committed and pushed: HACS → Custom repositories → add
-this repository as an Integration, install **Midea BLE**, restart Home Assistant,
-then use Settings → Devices & services → Add Integration → Midea BLE (or confirm
-a Bluetooth discovery notification). Home Assistant 2026.8 or newer is required.
+Compatibility is limited to devices that use the BLE protocol implemented by
+this repository. Support for one Midea AC has been verified; this does not imply
+support for every Midea product.
 
-The integration resolves Home Assistant's freshest connectable Bluetooth path
-and uses its retry connector, which is the architecture required for supported
-ESPHome Bluetooth proxies. A real proxy test is still needed before proxy support
-can be claimed as verified.
+## Requirements
 
-## Troubleshooting during development
+- Home Assistant 2026.8.0 or newer.
+- A local Bluetooth adapter or connectable ESPHome Bluetooth proxy within range
+  of the air conditioner.
+- A compatible AC advertising Midea manufacturer data under company ID
+  `0x06A8`.
 
-- No discovery: verify the AC is advertising, close enough, and emits complete
-  manufacturer data for company ID `0x06A8`.
-- Proxy cannot connect: ensure the proxy supports active connections, not only
-  passive advertisements.
-- Handshake/unknown model: use the development probe below to separate protocol
-  authentication failures from Home Assistant setup behavior.
-- Debug logging: configure `custom_components.midea_ble` at
-  debug level; session keys and private keys will never be logged.
+Bluetooth proxies must support active connections. Passive-only proxies can see
+advertisements but cannot control the device.
 
-### Development transaction probe
+## Installation with HACS
 
-With development dependencies installed, the shared client can be exercised
-directly against a BLE address and the 15-byte `advertisData` value:
+1. Open HACS in Home Assistant.
+2. Open the three-dot menu and select **Custom repositories**.
+3. Add `https://github.com/Der-Jan/midea-ble` as an **Integration**.
+4. Install **Midea BLE**.
+5. Restart Home Assistant.
+6. Open **Settings → Devices & services → Add integration → Midea BLE**.
+7. Select the discovered air conditioner and confirm setup.
+
+Home Assistant may also present the device automatically as a discovered
+integration.
+
+## Supported controls
+
+- Power on and off
+- Operating mode
+- Target temperature
+- Fan speed
+- Swing mode
+- Status updates
+
+## Bluetooth discovery
+
+The integration accepts both the complete Midea advertisement and the shorter
+marker-and-serial advertisement exposed by some Home Assistant scanners. For the
+short form, it reconstructs the handshake input from Home Assistant's observed
+Bluetooth address.
+
+If no device is found:
+
+- Confirm that the AC appears under **Settings → Bluetooth → Advertisements**.
+- Power-cycle the AC and close any phone app currently connected to it.
+- Move the Bluetooth adapter or proxy closer to the AC.
+- Set the scanner to **Active** or **Auto** mode.
+- For a VM, confirm that its Bluetooth adapter is passed through.
+- For Home Assistant Container, confirm that BlueZ and D-Bus are accessible.
+- Confirm that a remote proxy supports active BLE connections and has a free
+  connection slot.
+
+## Debug logging
+
+Enable debug logging for `custom_components.midea_ble` and inspect the Home
+Assistant system log. Session keys and private keys are never logged.
+
+## Development transaction probe
+
+The integration and development probe share the same Python transaction client.
+With the development dependencies installed, run:
 
 ```bash
 python scripts/probe_python.py <BLE_ADDRESS> <ADVERTIS_DATA_HEX>
 ```
 
-The probe is a thin direct-Bleak wrapper around the same transaction client used
-by the integration. By default it performs C1/C2/C3 plus a status query. Passing
-`--power-on` or `--power-off` preserves the reported settings, changes only
-power, and verifies the returned state. Home Assistant supplies a different
-dialer that supports its local adapters and connectable proxies.
+The default operation performs C1/C2/C3 authentication followed by a status
+query. `--power-on` and `--power-off` preserve the reported settings, change only
+the power state, and verify the returned status.
 
----
+Home Assistant uses a separate dialer that selects the freshest connectable path
+through its local adapters and supported Bluetooth proxies.
 
-## Upstream Go protocol reference
+## Protocol documentation
 
-[![English](https://img.shields.io/badge/README-English-blue.svg)](README.md)
+- [BLE protocol specification](docs/protocol.md)
+- [Python port and implementation notes](docs/protocol-port-plan.md)
+- [Previously tested AC](docs/discovered-ac.md)
 
-美的/华凌空调 BLE 直连控制协议参考实现——不经 App、不经云端，从电脑通过蓝牙直接控制你的空调。
+## Attribution and disclaimer
 
-[![Go Version](https://img.shields.io/badge/Go-1.25-blue.svg)](https://go.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.1.0-lightgrey.svg)](https://github.com/sorinyang/midea-ble-go/tags)
+The protocol implementation was ported from the original
+[`midea-ble-go`](https://github.com/sorinyang/midea-ble-go) research and reference
+implementation.
 
-> ⚠️ **免责声明**
->
-> 通信协议基于对设备行为的公开研究分析得出，并非官方发布或授权的实现。  
-仅供技术学习与合法研究用途，禁止将其用于任何侵犯第三方权益或违反当地法律法规的场景。  
-因使用本项目产生的一切后果由使用者自行承担，与项目作者及贡献者无关。 
+The communication protocol was derived from publicly researched device
+behavior; it is not an official or authorized Midea protocol implementation.
+This project is intended for lawful interoperability, research, and personal use.
+Users are responsible for ensuring that their use complies with applicable laws
+and does not infringe third-party rights. The authors and contributors accept no
+liability for consequences arising from use of this software.
 
-## 这是什么
+Midea, Hualing, and their respective logos and trademarks belong to their owners.
+Their use here is solely for product identification and does not imply
+endorsement.
 
-- **协议**：描述美的/华凌空调 BLE 通信的完整链路——从蓝牙广播解析、HKDF 密钥派生、P-256 ECDH 密钥协商、AES-128-CCM 加解密，到三层帧编解码与业务命令编码。
-- **库**：协议参考实现（`internal/ac`、`internal/proto`、`internal/ble`），按四层架构组织，提供 `IDevice` 门面可直接嵌入你自己的 Go 项目做二次开发。
-- **Android 适配**：`mobile` 是面向 gomobile 的薄适配层，将 `internal/ac` 导出为 AAR；Android BluetoothGatt 和 Compose demo 位于独立项目，不混入本仓库的平台目录。
+## License
 
-## 特性
-
-- 支持美的及华凌子品牌空调的 BLE 直连控制（开机/关机/模式/温度/风速/扫风/ECO/强劲）
-- 完整实现握手流程（C1→C2→C3）与密钥协商，无需设备预先配对
-- 协议层纯算法实现，零外部蓝牙依赖，离线可测（含一致性测试向量）
-- 通过 `Transport` 接口与平台解耦，已支持 macOS CoreBluetooth 和 Linux BlueZ
-
-### 作为库使用
-
-```go
-import "github.com/sorinyang/midea-ble-go/internal/ac"
-
-// 扫描设备
-devices, _ := ac.Discover(ctx, timeout)
-
-// 连接并握手
-dev, _ := ac.OpenDevice(ctx, devices[0], nil)
-dev.Connect(ctx)
-
-// 控制和查询
-dev.Power().Set(ctx, true)          // 开机
-temp, _ := dev.Temperature().Get(ctx)  // 读取当前温度
-dev.Mode().Set(ctx, "cool")          // 制冷模式
-dev.Fan().Set(ctx, "auto")           // 自动风速
-
-// 订阅状态变更
-ch := dev.Watch()
-for state := range ch {
-    fmt.Printf("电源=%v 模式=%s 温度=%.1f℃\n", state.Run, state.Mode, state.Temp)
-}
-```
-
-### Android AAR
-
-协议 AAR 可复制到独立 Android demo 的 `app/libs/midea-mobile.aar`，再由 demo
-提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compose
-界面、扫描和连接代码不属于本仓库，便于 Android 应用独立演进。
-
-## 基于本协议库的应用
-
-- [Midea-BLE / 美的 BLE（Android）](https://github.com/midea-ble/midea-ble-android#readme)：基于本协议库的独立 Android 应用。
-
-## 文档
-
-- 协议规范（BLE 特征、帧结构、密钥派生、握手时序、业务命令）→ [docs/protocol.md](docs/protocol.md)
-- 架构设计（四层分层、关键设计决策、数据流全景）→ [docs/architecture.md](docs/architecture.md)
-
-## 许可证
-
-本项目代码以 [MIT License](LICENSE) 授权。协议规范文档（`docs/protocol.md`）随代码一同发布，供研究与学习参考。
+The source code and protocol documentation are provided under the
+[MIT License](LICENSE).

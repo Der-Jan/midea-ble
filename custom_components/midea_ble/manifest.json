@@ -16,5 +16,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/midea-ble/midea-ble-go/issues",
   "requirements": ["bleak-retry-connector==4.6.3"],
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
