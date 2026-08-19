@@ -72,7 +72,6 @@ dialer that supports its local adapters and connectable proxies.
 - **协议**：描述美的/华凌空调 BLE 通信的完整链路——从蓝牙广播解析、HKDF 密钥派生、P-256 ECDH 密钥协商、AES-128-CCM 加解密，到三层帧编解码与业务命令编码。
 - **库**：协议参考实现（`internal/ac`、`internal/proto`、`internal/ble`），按四层架构组织，提供 `IDevice` 门面可直接嵌入你自己的 Go 项目做二次开发。
 - **Android 适配**：`mobile` 是面向 gomobile 的薄适配层，将 `internal/ac` 导出为 AAR；Android BluetoothGatt 和 Compose demo 位于独立项目，不混入本仓库的平台目录。
-- **CLI**：配套的命令行工具 `midea-ble-go`，支持单次命令执行和 REPL 交互两种模式，用于快速验证协议或日常控制空调。
 
 ## 特性
 
@@ -80,43 +79,6 @@ dialer that supports its local adapters and connectable proxies.
 - 完整实现握手流程（C1→C2→C3）与密钥协商，无需设备预先配对
 - 协议层纯算法实现，零外部蓝牙依赖，离线可测（含一致性测试向量）
 - 通过 `Transport` 接口与平台解耦，已支持 macOS CoreBluetooth 和 Linux BlueZ
-- CLI 提供有状态 REPL 交互模式（连接保持、多轮操作、自动补全）和单次命令模式
-- 已知设备自动入库，后续直接用 SN 标识操作，无需每次指定广播数据
-
-## 快速开始
-
-### 安装
-
-```bash
-go install github.com/sorinyang/midea-ble-go/cmd/midea-ble-go@latest
-```
-
-或从源码编译：
-
-```bash
-git clone https://github.com/sorinyang/midea-ble-go.git
-cd midea-ble-go
-make build
-```
-
-### CLI 最小示例
-
-```bash
-# 扫描周围空调
-midea-ble-go scan
-
-# 探查看一台设备（握手验证），成功自动入库
-midea-ble-go probe
-
-# 查询状态
-midea-ble-go status 你的设备SN
-
-# 制冷 26℃
-midea-ble-go set 你的设备SN --mode cool --temp 26
-
-# 进入 REPL 交互模式
-midea-ble-go
-```
 
 ### 作为库使用
 
@@ -145,16 +107,8 @@ for state := range ch {
 
 ### Android AAR
 
-在本仓库生成协议 AAR：
-
-```bash
-gomobile bind -target android -androidapi 23 \\
-  -javapkg com.sorinyang.mideable \\
-  -o build/midea-mobile.aar ./mobile
-```
-
-将生成的文件复制到独立 Android demo 的 `app/libs/midea-mobile.aar`，再由
-demo 提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compose
+协议 AAR 可复制到独立 Android demo 的 `app/libs/midea-mobile.aar`，再由 demo
+提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compose
 界面、扫描和连接代码不属于本仓库，便于 Android 应用独立演进。
 
 ## 基于本协议库的应用
@@ -165,7 +119,6 @@ demo 提供 `mobile.Transport` 的 BluetoothGatt 实现。Android demo 的 Compo
 
 - 协议规范（BLE 特征、帧结构、密钥派生、握手时序、业务命令）→ [docs/protocol.md](docs/protocol.md)
 - 架构设计（四层分层、关键设计决策、数据流全景）→ [docs/architecture.md](docs/architecture.md)
-- CLI 使用说明（命令参考、REPL 模式、已知设备机制）→ [docs/cli.md](docs/cli.md)
 
 ## 许可证
 
