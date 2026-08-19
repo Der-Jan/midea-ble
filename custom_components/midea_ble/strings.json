@@ -1,0 +1,14 @@
+{
+  "title": "Midea BLE",
+  "config": {
+    "step": {
+      "confirm": {"title": "Set up {name}", "description": "Set up this Midea BLE air conditioner?"},
+      "user": {"title": "Choose a Midea BLE device", "data": {"device": "Device"}}
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "no_devices_found": "No compatible connectable Midea BLE devices were found.",
+      "not_supported": "The Bluetooth advertisement is not supported."
+    }
+  }
+}

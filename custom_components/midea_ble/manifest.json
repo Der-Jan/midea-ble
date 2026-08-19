@@ -1,0 +1,20 @@
+{
+  "domain": "midea_ble",
+  "name": "Midea BLE",
+  "bluetooth": [
+    {
+      "connectable": true,
+      "manufacturer_id": 1704,
+      "manufacturer_data_start": [1]
+    }
+  ],
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["bluetooth", "bluetooth_adapters"],
+  "documentation": "https://github.com/midea-ble/midea-ble-go#readme",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/midea-ble/midea-ble-go/issues",
+  "requirements": ["bleak-retry-connector==4.6.3"],
+  "version": "0.1.0"
+}

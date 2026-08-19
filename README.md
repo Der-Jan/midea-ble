@@ -1,4 +1,57 @@
-# midea-ble-go
+# Midea BLE for Home Assistant (experimental)
+
+This repository is being developed into a HACS-compatible Home Assistant custom
+integration for direct, local control of compatible Midea/Hualing BLE air
+conditioners. It includes Bluetooth discovery/config flow, native Python
+cryptography and framing, C1/C2/C3 authentication, one-shot connection/session
+handling, and a functional climate entity for power, mode, temperature, fan,
+and swing control. See
+[`docs/protocol-port-plan.md`](docs/protocol-port-plan.md).
+
+Compatibility is limited to devices speaking the protocol implemented by this
+repository. It does not imply support for every Midea product.
+
+## Development HACS installation
+
+After these changes are committed and pushed: HACS → Custom repositories → add
+this repository as an Integration, install **Midea BLE**, restart Home Assistant,
+then use Settings → Devices & services → Add Integration → Midea BLE (or confirm
+a Bluetooth discovery notification). Home Assistant 2026.8 or newer is required.
+
+The integration resolves Home Assistant's freshest connectable Bluetooth path
+and uses its retry connector, which is the architecture required for supported
+ESPHome Bluetooth proxies. A real proxy test is still needed before proxy support
+can be claimed as verified.
+
+## Troubleshooting during development
+
+- No discovery: verify the AC is advertising, close enough, and emits complete
+  manufacturer data for company ID `0x06A8`.
+- Proxy cannot connect: ensure the proxy supports active connections, not only
+  passive advertisements.
+- Handshake/unknown model: use the development probe below to separate protocol
+  authentication failures from Home Assistant setup behavior.
+- Debug logging: configure `custom_components.midea_ble` at
+  debug level; session keys and private keys will never be logged.
+
+### Development transaction probe
+
+With development dependencies installed, the shared client can be exercised
+directly against a BLE address and the 15-byte `advertisData` value:
+
+```bash
+python scripts/probe_python.py <BLE_ADDRESS> <ADVERTIS_DATA_HEX>
+```
+
+The probe is a thin direct-Bleak wrapper around the same transaction client used
+by the integration. By default it performs C1/C2/C3 plus a status query. Passing
+`--power-on` or `--power-off` preserves the reported settings, changes only
+power, and verifies the returned state. Home Assistant supplies a different
+dialer that supports its local adapters and connectable proxies.
+
+---
+
+## Upstream Go protocol reference
 
 [![English](https://img.shields.io/badge/README-English-blue.svg)](README.md)
 

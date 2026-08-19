@@ -4,3 +4,10 @@
 .DS_Store
 .idea/
 .vscode/
+__pycache__/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
