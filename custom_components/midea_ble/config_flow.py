@@ -29,10 +29,12 @@ class MideaBleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle a connectable Midea advertisement."""
         if not discovery_info.connectable or not is_supported_manufacturer_data(
-            discovery_info.manufacturer_data
+            discovery_info.manufacturer_data, discovery_info.address
         ):
             return self.async_abort(reason="not_supported")
-        parsed = parse_manufacturer_data(discovery_info.manufacturer_data)
+        parsed = parse_manufacturer_data(
+            discovery_info.manufacturer_data, discovery_info.address
+        )
         await self.async_set_unique_id(parsed.unique_id)
         self._abort_if_unique_id_configured()
         self._discovery = discovery_info
@@ -69,8 +71,8 @@ class MideaBleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             str, tuple[bluetooth.BluetoothServiceInfoBleak, MideaAdvertisement]
         ] = {}
         for info in bluetooth.async_discovered_service_info(self.hass, connectable=True):
-            if is_supported_manufacturer_data(info.manufacturer_data):
-                parsed = parse_manufacturer_data(info.manufacturer_data)
+            if is_supported_manufacturer_data(info.manufacturer_data, info.address):
+                parsed = parse_manufacturer_data(info.manufacturer_data, info.address)
                 devices[parsed.unique_id] = (info, parsed)
         if not devices:
             return self.async_abort(reason="no_devices_found")
