@@ -11,14 +11,17 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 from .protocol.commands import (
     BIZ_TYPE_AC,
     ACState,
     build_control_frame,
+    build_energy_query_frame,
     build_query_frame,
 )
+from .protocol.energy import ACEnergy, PowerAnalysisMethod, parse_energy_frame
 from .protocol.exceptions import (
     MideaBleAuthenticationError,
     MideaBleConnectionError,
@@ -33,6 +36,14 @@ _LOGGER = logging.getLogger(__name__)
 
 NotifyCallback = Callable[[bytes], None]
 StateMutation = Callable[[ACState], None]
+
+
+@dataclass(frozen=True, slots=True)
+class ACData:
+    """One coordinated status and optional energy snapshot."""
+
+    status: ACStatus
+    energy: ACEnergy | None
 
 
 class AsyncTransport(Protocol):
@@ -139,32 +150,40 @@ class _ConnectedSession:
         while not self._queue.empty():
             self._queue.get_nowait()
 
-    async def business(self, appliance_frame: bytes) -> ACStatus:
-        """Send C4 with fresh sequence/nonce retries and parse the reply."""
+    async def business(
+        self, appliance_frame: bytes, *, attempts: int = 4, timeout: float = 3.0
+    ) -> bytes:
+        """Send one appliance packet through encrypted BLE business frames."""
         self._discard_pending()
-        for _ in range(4):
+        for _ in range(attempts):
             frame = self._state.build_biz(BIZ_TYPE_AC, appliance_frame)
             await self._transport.write(frame)
             try:
-                reply = await self._wait_for("biz", 3.0)
+                reply = await self._wait_for("biz", timeout)
             except TimeoutError:
                 continue
             if reply.biz_body is None:
                 raise MideaBleError("business response omitted its appliance frame")
-            return parse_status_frame(reply.biz_body)
+            return reply.biz_body
         raise MideaBleConnectionError("timed out waiting for business response")
 
 
 class MideaBleClient:
     """Serialize complete one-shot queries and read-modify-write controls."""
 
-    def __init__(self, dialer: Dialer, advertis_data: bytes) -> None:
+    def __init__(
+        self,
+        dialer: Dialer,
+        advertis_data: bytes,
+        power_analysis_method: PowerAnalysisMethod = PowerAnalysisMethod.PORTASPLIT,
+    ) -> None:
         if len(advertis_data) < 11:
             raise ValueError("advertis_data must be at least 11 bytes")
         self._dialer = dialer
         self._advertis_data = bytes(advertis_data)
         self._operation_lock = asyncio.Lock()
         self._order = 0
+        self._power_analysis_method = power_analysis_method
 
     def _next_order(self) -> int:
         self._order = self._order % 255 + 1
@@ -185,7 +204,34 @@ class MideaBleClient:
         async with self._operation_lock:
             transport, session = await self._open()
             try:
-                return await session.business(build_query_frame(self._next_order()))
+                raw = await session.business(build_query_frame(self._next_order()))
+                return parse_status_frame(raw)
+            finally:
+                await transport.close()
+
+    async def async_query_data(self) -> ACData:
+        """Read status and, when supported, energy in one encrypted session."""
+        async with self._operation_lock:
+            transport, session = await self._open()
+            try:
+                status_raw = await session.business(
+                    build_query_frame(self._next_order())
+                )
+                status = parse_status_frame(status_raw)
+                try:
+                    energy_raw = await session.business(
+                        build_energy_query_frame(), attempts=1
+                    )
+                    _LOGGER.debug(
+                        "Received AC energy appliance frame: %s", energy_raw.hex()
+                    )
+                    energy = parse_energy_frame(
+                        energy_raw, self._power_analysis_method
+                    )
+                except MideaBleError as err:
+                    _LOGGER.debug("AC energy query is not supported: %s", err)
+                    energy = None
+                return ACData(status=status, energy=energy)
             finally:
                 await transport.close()
 
@@ -194,12 +240,16 @@ class MideaBleClient:
         async with self._operation_lock:
             transport, session = await self._open()
             try:
-                current = await session.business(build_query_frame(self._next_order()))
+                current_raw = await session.business(
+                    build_query_frame(self._next_order())
+                )
+                current = parse_status_frame(current_raw)
                 state = current.as_control_state()
                 mutate(state)
-                return await session.business(
+                result_raw = await session.business(
                     build_control_frame(state, self._next_order())
                 )
+                return parse_status_frame(result_raw)
             finally:
                 await transport.close()
 

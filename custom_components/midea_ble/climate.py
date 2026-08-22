@@ -95,25 +95,25 @@ class MideaBleClimate(CoordinatorEntity[MideaBleCoordinator], ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
-        if not self.coordinator.data.power:
+        if not self.coordinator.data.status.power:
             return HVACMode.OFF
-        return MODE_TO_HVAC.get(self.coordinator.data.mode, HVACMode.AUTO)
+        return MODE_TO_HVAC.get(self.coordinator.data.status.mode, HVACMode.AUTO)
 
     @property
     def target_temperature(self) -> float:
-        return self.coordinator.data.target_temperature
+        return self.coordinator.data.status.target_temperature
 
     @property
     def current_temperature(self) -> float:
-        return self.coordinator.data.current_temperature
+        return self.coordinator.data.status.current_temperature
 
     @property
     def fan_mode(self) -> str:
-        return FAN_TO_NAME.get(self.coordinator.data.fan_speed, "auto")
+        return FAN_TO_NAME.get(self.coordinator.data.status.fan_speed, "auto")
 
     @property
     def swing_mode(self) -> str:
-        status = self.coordinator.data
+        status = self.coordinator.data.status
         if status.swing_up_down and status.swing_left_right:
             return SWING_BOTH
         if status.swing_up_down:

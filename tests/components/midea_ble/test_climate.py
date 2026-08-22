@@ -5,6 +5,7 @@ from typing import cast
 
 from homeassistant.components.climate.const import HVACMode
 
+from custom_components.midea_ble.client import ACData
 from custom_components.midea_ble.climate import (
     SWING_BOTH,
     MideaBleClimate,
@@ -16,19 +17,22 @@ from custom_components.midea_ble.protocol.status import ACStatus
 class FakeCoordinator:
     def __init__(self) -> None:
         self.serial = "12345678AC0001"
-        self.data = ACStatus(
-            power=True,
-            mode=2,
-            target_temperature=24.5,
-            fan_speed=102,
-            swing_up_down=True,
-            swing_left_right=True,
-            eco=False,
-            strong=False,
-            electric_heat=False,
-            target_temperature_2=24.5,
-            current_temperature=23.7,
-            outdoor_temperature=18.2,
+        self.data = ACData(
+            status=ACStatus(
+                power=True,
+                mode=2,
+                target_temperature=24.5,
+                fan_speed=102,
+                swing_up_down=True,
+                swing_left_right=True,
+                eco=False,
+                strong=False,
+                electric_heat=False,
+                target_temperature_2=24.5,
+                current_temperature=23.7,
+                outdoor_temperature=18.2,
+            ),
+            energy=None,
         )
         self.power_commands: list[bool] = []
 

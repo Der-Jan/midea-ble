@@ -68,6 +68,25 @@ def build_query_frame(order: int, *, sound: bool = False) -> bytes:
     return bytes(frame)
 
 
+def build_energy_query_frame() -> bytes:
+    """Build the group-4 (power and energy) appliance query.
+
+    Unlike the ordinary 0x41 status query, this group-data form has no message
+    id/order byte. Its six-byte body and CRC match Midea's V1 AC protocol; the
+    surrounding BLE business/security/connection frames are added separately.
+    """
+    body = bytes.fromhex("412101440001")
+    frame = bytearray(18)
+    frame[0] = 0xAA
+    frame[1] = len(frame) - 1
+    frame[2] = 0xAC
+    frame[9] = 3
+    frame[10:16] = body
+    frame[16] = _crc8_854(body)
+    frame[17] = _checksum(bytes(frame[1:17]))
+    return bytes(frame)
+
+
 def _encode_temperature(temperature: float) -> int:
     tenths = int(temperature * 10 + 0.5)
     if not 160 <= tenths <= 300:

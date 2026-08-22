@@ -200,7 +200,9 @@ APP                                              空调
 - `crc8_854(arr,n)`：查表 CRC8（表见 `internal/ac/appliance.go` 的 `crc8854Table`），作用于数据段。
 - `makeSum(arr,n) = (255 - Σ + 1) & 0xFF`（二补和），作用于整帧尾。
 
-> 注：代码目前**仅处理 0x40 / 0x41 / 0xC0**。0xC1 扩展上报（时间/运行参数/电量等）与 0xB0/0xB1（新协议）未实现。
+> The Python integration also handles the `0xC1` group-`0x44` power/energy
+> response. See [AC power and energy protocol](energy-protocol.md). Other C1
+> groups and the `0xB0`/`0xB1` protocol remain unsupported.
 
 ### 7.2 控制帧 0x40（共 37 字节，`a[1]=36`）
 

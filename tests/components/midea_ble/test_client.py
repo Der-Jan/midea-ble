@@ -42,6 +42,7 @@ class FakeACTransport:
         self.sequence = 0
         self.power = False
         self.closed = False
+        self.appliance_requests: list[bytes] = []
 
     async def start_notify(self, callback: NotifyCallback) -> None:
         self.callback = callback
@@ -91,6 +92,21 @@ class FakeACTransport:
         assert security.command == SEC_C4
         biz = decode_biz(security.body)
         assert biz.frame_type == BIZ_TYPE_AC
+        self.appliance_requests.append(biz.body)
+        if biz.body == bytes.fromhex(
+            "aa11ac00000000000003412101440001098f"
+        ):
+            response = bytes.fromhex(
+                "aa22ac00000000000803c121014400000017000000000000000000000f"
+                "000000015d7c"
+            )
+            self._respond(
+                CONN_T3,
+                self.session_key,
+                SEC_C4,
+                encode_biz(BIZ_TYPE_AC, response),
+            )
+            return
         if biz.body[10] == 0x40:
             self.power = bool(biz.body[11] & 1)
         self._respond(
@@ -135,5 +151,23 @@ def test_query_and_power_read_modify_write() -> None:
         assert verified.power
         assert len(dialer.transports) == 3
         assert all(transport.closed for transport in dialer.transports)
+
+    asyncio.run(run())
+
+
+def test_energy_query_is_carried_inside_encrypted_ble_business_frame() -> None:
+    async def run() -> None:
+        dialer = FakeDialer()
+        client = MideaBleClient(dialer, ADVERTIS_DATA)
+        data = await client.async_query_data()
+        assert data.energy is not None
+        assert data.energy.realtime_power == 1.5
+        assert data.energy.current_energy_consumption == 0.0
+        assert data.energy.total_energy_consumption == 0.23
+        transport = dialer.transports[0]
+        assert transport.appliance_requests[1].hex() == (
+            "aa11ac00000000000003412101440001098f"
+        )
+        assert transport.closed
 
     asyncio.run(run())

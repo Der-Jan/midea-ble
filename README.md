@@ -7,8 +7,8 @@ local control of compatible Midea and Hualing Bluetooth air conditioners. It
 does not require the Midea app or a cloud connection.
 
 The integration provides Bluetooth discovery, native Python authentication and
-protocol handling, and a climate entity for power, operating mode, target
-temperature, fan speed, and swing control.
+protocol handling, a climate entity for operating mode, target temperature,
+fan speed, and swing control, and PortaSplit power/energy sensors.
 
 Compatibility is limited to devices that use the BLE protocol implemented by
 this repository. Support for one Midea AC has been verified; this does not imply
