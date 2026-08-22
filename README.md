@@ -10,6 +10,11 @@ The integration provides Bluetooth discovery, native Python authentication and
 protocol handling, a climate entity for operating mode, target temperature,
 fan speed, and swing control, and PortaSplit power/energy sensors.
 
+Capability-gated PortaSplit controls are also available for Outdoor Silent,
+power-rate limiting, screen display, and self-clean. See
+[optional appliance commands](docs/optional-features.md) for the tested support
+matrix and intentionally unexposed commands.
+
 Compatibility is limited to devices that use the BLE protocol implemented by
 this repository. Support for one Midea AC has been verified; this does not imply
 support for every Midea product.

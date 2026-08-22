@@ -28,6 +28,16 @@ from .protocol.exceptions import (
     MideaBleError,
     MideaBleHandshakeError,
 )
+from .protocol.features import (
+    ACOptionalState,
+    ACProperty,
+    B5Capability,
+    build_capability_query_frame,
+    build_display_toggle_frame,
+    build_property_query_frame,
+    build_property_set_frame,
+    parse_tlv_response,
+)
 from .protocol.frames import ConnFrameBuffer
 from .protocol.handshake import HandshakeState, ReceiveInfo
 from .protocol.status import ACStatus, parse_status_frame
@@ -44,6 +54,7 @@ class ACData:
 
     status: ACStatus
     energy: ACEnergy | None
+    optional: ACOptionalState | None = None
 
 
 class AsyncTransport(Protocol):
@@ -209,7 +220,9 @@ class MideaBleClient:
             finally:
                 await transport.close()
 
-    async def async_query_data(self) -> ACData:
+    async def async_query_data(
+        self, optional: ACOptionalState | None = None
+    ) -> ACData:
         """Read status and, when supported, energy in one encrypted session."""
         async with self._operation_lock:
             transport, session = await self._open()
@@ -231,7 +244,135 @@ class MideaBleClient:
                 except MideaBleError as err:
                     _LOGGER.debug("AC energy query is not supported: %s", err)
                     energy = None
-                return ACData(status=status, energy=energy)
+                refreshed_optional = optional
+                if optional and optional.values:
+                    try:
+                        raw = await session.business(
+                            build_property_query_frame(
+                                tuple(optional.values), self._next_order()
+                            ),
+                            attempts=1,
+                        )
+                        body_type, response = parse_tlv_response(raw)
+                        if body_type == 0xB1:
+                            values = {
+                                prop: response[int(prop)]
+                                for prop in optional.values
+                                if int(prop) in response
+                            }
+                            refreshed_optional = ACOptionalState(
+                                values=values,
+                                b5_values=optional.b5_values,
+                            )
+                    except MideaBleError as err:
+                        _LOGGER.debug("Optional property refresh failed: %s", err)
+                return ACData(
+                    status=status,
+                    energy=energy,
+                    optional=refreshed_optional,
+                )
+            finally:
+                await transport.close()
+
+    async def async_probe_optional_features(self) -> ACOptionalState:
+        """Probe prioritized optional properties independently over BLE."""
+        async with self._operation_lock:
+            transport, session = await self._open()
+            try:
+                b5_values: dict[int, bytes] = {}
+                for additional in (False, True):
+                    try:
+                        raw = await session.business(
+                            build_capability_query_frame(
+                                self._next_order(), additional=additional
+                            ),
+                            attempts=1,
+                        )
+                        _LOGGER.debug("Received AC B5 frame: %s", raw.hex())
+                        body_type, b5_response = parse_tlv_response(raw)
+                        if body_type == 0xB5:
+                            b5_values.update(b5_response)
+                    except MideaBleError as err:
+                        _LOGGER.debug("B5 capability query failed: %s", err)
+
+                properties = [
+                    ACProperty.OUTDOOR_SILENT,
+                    ACProperty.SCREEN_DISPLAY,
+                    ACProperty.WIND_UD_ANGLE,
+                    ACProperty.WIND_LR_ANGLE,
+                    ACProperty.SELF_CLEAN,
+                    ACProperty.INDOOR_HUMIDITY,
+                    ACProperty.ERROR_CODE,
+                ]
+                electricity = b5_values.get(B5Capability.ELECTRICITY)
+                if electricity and electricity[0] > 0:
+                    properties.append(ACProperty.RATE_SELECT)
+
+                property_values: dict[ACProperty, bytes] = {}
+                for prop in properties:
+                    try:
+                        raw = await session.business(
+                            build_property_query_frame(
+                                (prop,), self._next_order()
+                            ),
+                            attempts=1,
+                        )
+                        _LOGGER.debug(
+                            "Received AC property 0x%04x frame: %s",
+                            prop,
+                            raw.hex(),
+                        )
+                        body_type, response = parse_tlv_response(raw)
+                        data = response.get(prop)
+                        if body_type in (0xB0, 0xB1) and data is not None:
+                            property_values[prop] = data
+                    except MideaBleError as err:
+                        _LOGGER.debug("Property 0x%04x query failed: %s", prop, err)
+                return ACOptionalState(
+                    values=property_values, b5_values=b5_values
+                )
+            finally:
+                await transport.close()
+
+    async def async_set_optional_property(
+        self, prop: ACProperty, value: int
+    ) -> int | None:
+        """Set one B0 property, then query it back in the same BLE session."""
+        async with self._operation_lock:
+            transport, session = await self._open()
+            try:
+                set_raw = await session.business(
+                    build_property_set_frame(prop, value, self._next_order())
+                )
+                _LOGGER.debug(
+                    "Received AC property 0x%04x set response: %s",
+                    prop,
+                    set_raw.hex(),
+                )
+                query_raw = await session.business(
+                    build_property_query_frame((prop,), self._next_order())
+                )
+                _LOGGER.debug(
+                    "Received AC property 0x%04x verification: %s",
+                    prop,
+                    query_raw.hex(),
+                )
+                _, values = parse_tlv_response(query_raw)
+                data = values.get(prop)
+                return data[0] if data else None
+            finally:
+                await transport.close()
+
+    async def async_toggle_display(self) -> ACStatus:
+        """Toggle the legacy display control and return its C0 response."""
+        async with self._operation_lock:
+            transport, session = await self._open()
+            try:
+                raw = await session.business(
+                    build_display_toggle_frame(self._next_order())
+                )
+                _LOGGER.debug("Received display-toggle response: %s", raw.hex())
+                return parse_status_frame(raw)
             finally:
                 await transport.close()
 
@@ -309,5 +450,17 @@ class MideaBleClient:
 
         def mutate(state: ACState) -> None:
             state.strong = enabled
+
+        return await self.async_control(mutate)
+
+    async def async_set_legacy_preset(self, preset: str, enabled: bool) -> ACStatus:
+        """Set a C0-backed sleep, comfort, or away/frost-protect preset."""
+        if preset not in {"sleep", "comfort", "away"}:
+            raise ValueError(f"unknown AC preset: {preset}")
+
+        def mutate(state: ACState) -> None:
+            state.sleep_mode = enabled if preset == "sleep" else False
+            state.comfort_mode = enabled if preset == "comfort" else False
+            state.frost_protect = enabled if preset == "away" else False
 
         return await self.async_control(mutate)

@@ -26,6 +26,10 @@ class ACStatus:
     target_temperature_2: float
     current_temperature: float
     outdoor_temperature: float
+    screen_display: bool = False
+    sleep_mode: bool = False
+    comfort_mode: bool = False
+    frost_protect: bool = False
 
     def as_control_state(self) -> ACState:
         """Create a mutable full-control state while preserving reported fields."""
@@ -40,6 +44,9 @@ class ACStatus:
             strong=self.strong,
             electric_heat=self.electric_heat,
             target_temperature_2=self.target_temperature_2,
+            sleep_mode=self.sleep_mode,
+            comfort_mode=self.comfort_mode,
+            frost_protect=self.frost_protect,
         )
 
 
@@ -88,4 +95,8 @@ def parse_status_frame(frame: bytes) -> ACStatus:
         target_temperature_2=target_temperature_2,
         current_temperature=round(current_temperature, 1),
         outdoor_temperature=round(outdoor_temperature, 1),
+        screen_display=((status[14] >> 4) & 0x07) != 0x07 and bool(status[1] & 1),
+        sleep_mode=bool(status[10] & 0x01),
+        frost_protect=len(status) > 21 and bool(status[21] & 0x80),
+        comfort_mode=len(status) > 22 and bool(status[22] & 0x01),
     )

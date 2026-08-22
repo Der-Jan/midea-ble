@@ -3,7 +3,11 @@
 import asyncio
 
 from custom_components.midea_ble.client import MideaBleClient, NotifyCallback
-from custom_components.midea_ble.protocol.commands import BIZ_TYPE_AC
+from custom_components.midea_ble.protocol.commands import (
+    BIZ_TYPE_AC,
+    _checksum,
+    _crc8_854,
+)
 from custom_components.midea_ble.protocol.crypto import (
     cipher_message,
     create_keypair,
@@ -11,6 +15,7 @@ from custom_components.midea_ble.protocol.crypto import (
     derive_root_key,
     derive_session_key,
 )
+from custom_components.midea_ble.protocol.features import ACProperty
 from custom_components.midea_ble.protocol.frames import (
     CONN_T2,
     CONN_T3,
@@ -72,6 +77,19 @@ class FakeACTransport:
         raw[-1] = -sum(raw[1:-1]) & 0xFF
         return bytes(raw)
 
+    def _property_response(self, tag: int, value: int | None) -> bytes:
+        body = bytearray((0xB1, 1, tag & 0xFF, tag >> 8, 0, int(value is not None)))
+        if value is not None:
+            body.append(value)
+        body.append(0)
+        body.append(_crc8_854(bytes(body)))
+        frame = bytearray(10 + len(body) + 1)
+        frame[:10] = bytes.fromhex("aa00ac00000000000803")
+        frame[1] = len(frame) - 1
+        frame[10:-1] = body
+        frame[-1] = _checksum(bytes(frame[1:-1]))
+        return bytes(frame)
+
     async def write(self, data: bytes) -> None:
         conn = decode_conn(data)
         if conn.frame_type == CONN_T2:
@@ -93,6 +111,37 @@ class FakeACTransport:
         biz = decode_biz(security.body)
         assert biz.frame_type == BIZ_TYPE_AC
         self.appliance_requests.append(biz.body)
+        if biz.body[10] == 0xB5:
+            response = bytes.fromhex(
+                "aa3dac00000000000803b50a1202010114020101150201001e02010117020102"
+                "1a02010110020101250207203c203c203c0024020101480001010101c71a"
+                if biz.body[12] == 0
+                else "aa2fac00000000000803b5081f0201002c020101160201043900010151000101"
+                "e300010113020101cd0001030002365b"
+            )
+            self._respond(
+                CONN_T3,
+                self.session_key,
+                SEC_C4,
+                encode_biz(BIZ_TYPE_AC, response),
+            )
+            return
+        if biz.body[10] == 0xB1:
+            tag = biz.body[12] | (biz.body[13] << 8)
+            values = {
+                ACProperty.OUTDOOR_SILENT: 0,
+                ACProperty.WIND_UD_ANGLE: 0,
+                ACProperty.SELF_CLEAN: 0,
+                ACProperty.RATE_SELECT: 100,
+            }
+            response = self._property_response(tag, values.get(ACProperty(tag)))
+            self._respond(
+                CONN_T3,
+                self.session_key,
+                SEC_C4,
+                encode_biz(BIZ_TYPE_AC, response),
+            )
+            return
         if biz.body == bytes.fromhex(
             "aa11ac00000000000003412101440001098f"
         ):
@@ -169,5 +218,22 @@ def test_energy_query_is_carried_inside_encrypted_ble_business_frame() -> None:
             "aa11ac00000000000003412101440001098f"
         )
         assert transport.closed
+
+    asyncio.run(run())
+
+
+def test_optional_capability_queries_use_encrypted_ble_business_frames() -> None:
+    async def run() -> None:
+        dialer = FakeDialer()
+        client = MideaBleClient(dialer, ADVERTIS_DATA)
+        optional = await client.async_probe_optional_features()
+        assert optional.value(ACProperty.OUTDOOR_SILENT) == 0
+        assert optional.value(ACProperty.RATE_SELECT) == 100
+        assert optional.value(ACProperty.WIND_UD_ANGLE) == 0
+        assert ACProperty.WIND_LR_ANGLE not in optional.values
+        requests = dialer.transports[0].appliance_requests
+        assert requests[0].hex() == "aa0fac00000000000803b5010001e59e"
+        assert all(request.startswith(b"\xaa") for request in requests)
+        assert dialer.transports[0].closed
 
     asyncio.run(run())

@@ -47,6 +47,9 @@ class ACState:
     strong: bool = False
     electric_heat: bool = False
     target_temperature_2: float = 26.0
+    sleep_mode: bool = False
+    comfort_mode: bool = False
+    frost_protect: bool = False
 
 
 def build_query_frame(order: int, *, sound: bool = False) -> bytes:
@@ -124,12 +127,15 @@ def build_control_frame(state: ACState, order: int, *, sound: bool = True) -> by
         frame[17] |= 0x0C
     frame[18] = int(state.strong) << 5
     frame[19] = (int(state.electric_heat) << 3) | (int(state.eco) << 7)
+    frame[20] = int(state.sleep_mode)
     # Ten default sleep temperatures of 26 C, packed two per byte.
     frame[21:26] = b"\x99" * 5
     frame[27] = 10
     target_2_tenths = int(state.target_temperature_2 * 10 + 1.0)
     frame[28] = (target_2_tenths // 10 - 12) & 0x1F
     frame[29] = 0x80
+    frame[31] = int(state.frost_protect) << 7
+    frame[32] = int(state.comfort_mode)
     frame[34] = order & 0xFF
     frame[35] = _crc8_854(bytes(frame[10:35]))
     frame[36] = _checksum(bytes(frame[1:36]))

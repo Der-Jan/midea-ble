@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 else:
     MideaBleConfigEntry = Any
 
-PLATFORMS = ["climate", "sensor"]
+PLATFORMS = ["climate", "select", "sensor", "switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MideaBleConfigEntry) -> bool:
