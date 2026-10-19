@@ -15,7 +15,7 @@ def test_manifest_has_connectable_protocol_matcher() -> None:
     assert manifest["integration_type"] == "device"
     assert manifest["iot_class"] == "local_push"
     assert manifest["dependencies"] == ["bluetooth", "bluetooth_adapters"]
-    assert manifest["requirements"] == ["bleak-retry-connector==4.6.3"]
+    assert manifest["requirements"] == ["bleak-retry-connector>=4.6.3"]
     assert manifest["bluetooth"] == [
         {
             "connectable": True,
