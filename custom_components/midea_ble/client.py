@@ -146,7 +146,7 @@ class _ConnectedSession:
         )
         if c2.peer_public_key is None:
             raise MideaBleHandshakeError("C2 response omitted the peer public key")
-        self._state.establish_session(c2.peer_public_key)
+        await asyncio.to_thread(self._state.establish_session, c2.peer_public_key)
         c3 = await self._send_until_reply(
             "c3",
             self._state.build_c3,

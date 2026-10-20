@@ -1,6 +1,9 @@
 """End-to-end async client tests against an in-memory AC simulator."""
 
 import asyncio
+import threading
+
+import pytest
 
 from custom_components.midea_ble.client import MideaBleClient, NotifyCallback
 from custom_components.midea_ble.protocol.commands import (
@@ -30,6 +33,7 @@ from custom_components.midea_ble.protocol.frames import (
     encode_conn,
     encode_security,
 )
+from custom_components.midea_ble.protocol.handshake import HandshakeState
 
 ADVERTIS_DATA = bytes.fromhex("ac3132333435363738aabbccddeeff")
 
@@ -186,6 +190,29 @@ class FakeDialer:
         transport.close = close  # type: ignore[method-assign]
         self.transports.append(transport)
         return transport
+
+
+def test_handshake_establishes_session_off_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    establish_session = HandshakeState.establish_session
+    event_loop_thread = threading.get_ident()
+    worker_threads: list[int] = []
+
+    def establish_in_worker(state: HandshakeState, peer_public_key: bytes) -> None:
+        worker_threads.append(threading.get_ident())
+        assert threading.get_ident() != event_loop_thread
+        establish_session(state, peer_public_key)
+
+    monkeypatch.setattr(HandshakeState, "establish_session", establish_in_worker)
+
+    async def run() -> None:
+        dialer = FakeDialer()
+        client = MideaBleClient(dialer, ADVERTIS_DATA)
+        status = await client.async_query()
+        assert not status.power
+        assert len(worker_threads) == 1
+        assert dialer.transports[0].closed
+
+    asyncio.run(run())
 
 
 def test_query_and_power_read_modify_write() -> None:
